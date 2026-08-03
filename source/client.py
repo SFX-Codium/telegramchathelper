@@ -3,7 +3,7 @@ from pyrogram import filters
 from pyrogram.types import Message
 from pyrogram.enums import ChatType
 from pyrogram.handlers import MessageHandler
-from config import myId, prefixCommand
+from config import myId, prefixCommand, clientCommands, profileCommands
 
 
 class HandlerFilter:
@@ -12,51 +12,47 @@ class HandlerFilter:
     meFilter = filters.create(name="filter", func=meFilterFunction)
     
     @staticmethod
-    def pointFilterFunction(_, message: Message):
-        if not (message.from_user and message.from_user.id == myId): return False
-        if not (message.text is not None): return False
-        if not (message.text == prefixCommand): return False
-        return True
-    pointFilter = filters.create(name="pointFilter", func=pointFilterFunction)
+    def commandFilterFunction(commands: list):
+        def function(_, __, message: Message):
+            if not (message.from_user and message.from_user.id == myId): return False
+            if not (message.text is not None): return False
+            if not (message.text.split(' ')[0] in commands): return False
+            return True
+        
+        return function
     
-    @staticmethod
-    def helloFilterFunction(_, message: Message):
-        if not (message.from_user and message.from_user.id == myId): return False
-        if not (message.text is not None): return False
-        if not (message.text in [f"{prefixCommand}hi",
-                                 f"{prefixCommand}hello",
-                                 f"{prefixCommand}пр",
-                                 f"{prefixCommand}привет"]): return False
-        return True
-    helloFilter = filters.create(name="helloFilter", func=helloFilterFunction)
+    pointFilter = filters.create(name="pointFilter", func=commandFilterFunction([prefixCommand]))
+    helloFilter = filters.create(name="helloFilter", func=commandFilterFunction([f"{prefixCommand}hi", f"{prefixCommand}hello", f"{prefixCommand}пр", f"{prefixCommand}привет"]))
+    getIdFilter = filters.create(name="getIdFilter", func=commandFilterFunction([f"{prefixCommand}id", f"{prefixCommand}айди"]))
 
-    @staticmethod
-    def createChatFilterFunction(_, message: Message):
-        if not (message.from_user and message.from_user.id == myId): return False
-        if not (message.text is not None): return False
-        if not (message.text.split(' ')[0] in [f"{prefixCommand}cchat", f"{prefixCommand}счат"]): return False
-        return True
-    createChatFilter = filters.create(name="createChatFilter", func=createChatFilterFunction)
-    
-    @staticmethod
-    def getIdFilterFunction(_, message: Message):
-        if not (message.from_user and message.from_user.id == myId): return False
-        if not (message.text is not None): return False
-        if not (message.text in [f"{prefixCommand}id",
-                                 f"{prefixCommand}айди"]): return False
-        return True
-    getIdFilter = filters.create(name="getIdFilter", func=getIdFilterFunction)
 
 class MessageText:
     hello: str = "**👏 Всех приветствую!**"
     helloUser: str = "**👏 Привет, {0}!**"
-    commandsList: str = f"""**📚 Список команд TG helper chat:**\n
+    commandsList: str = f"""
+**📚 Список команд TG helper chat:**\n
 **{prefixCommand}** __вызвать это меню__
 **{prefixCommand}hi** __поприветствовать__
-**{prefixCommand}cchat** __создать новую группу__
 **{prefixCommand}id** __получить id__
+**{prefixCommand}msg** __показать сообщения ('{prefixCommand}msg -h' — просмотр всех флагов)__
+
+Чат команды:
+**{prefixCommand}cchat** __создать новую группу__
+**{prefixCommand}dchat** __удалить группу__
+**{prefixCommand}prom** __изменить права участника__
+**{prefixCommand}warn** __выдать предупреждение__
+**{prefixCommand}ban** __выдать блокировку__
+**{prefixCommand}mbs** __список участников__
+
+Профиль команды:
+**{prefixCommand}ca** __поменять аватарку (Отправлять с изображением){" Доступно для всех." if profileCommands['cmdCaAll'] else ""}__
+
+Аниме API:
+**{prefixCommand}emotions** __список эмоций__
+**{prefixCommand}aniq** __случайная цитата на английском__
 
 __Бот создан **[SFX Codium](https://t.me/sfxcodium)**.__"""
+    
     newGroupCreated: str = """**ℹ️ Группа {0} создана.**
 Ссылка на группу: {1}
 Дата создания: {2}"""
@@ -68,10 +64,9 @@ __Бот создан **[SFX Codium](https://t.me/sfxcodium)**.__"""
 class Handler:
     @staticmethod
     def reigsterHandlers(client: Client) -> Client:
-        client.add_handler(MessageHandler(callback=Handler.helloUser, filters=HandlerFilter.helloFilter))
-        client.add_handler(MessageHandler(callback=Handler.helpCommand, filters=HandlerFilter.pointFilter))
-        client.add_handler(MessageHandler(callback=Handler.createChat, filters=HandlerFilter.createChatFilter))
-        client.add_handler(MessageHandler(callback=Handler.getId, filters=HandlerFilter.getIdFilter))
+        if clientCommands["cmdHello"]: client.add_handler(MessageHandler(callback=Handler.helloUser,   filters=HandlerFilter.helloFilter))
+        if clientCommands["cmdHelp"]:  client.add_handler(MessageHandler(callback=Handler.helpCommand, filters=HandlerFilter.pointFilter))
+        if clientCommands["cmdGetId"]: client.add_handler(MessageHandler(callback=Handler.getId,       filters=HandlerFilter.getIdFilter))
         return client
     
     @staticmethod
@@ -97,22 +92,6 @@ class Handler:
             message_id=message.id,
             text=messageText
         )
-    
-    @staticmethod
-    async def createChat(client: Client, message: Message):
-        try:
-            chat = await client.create_group(title=" ".join(message.text.split(' ')[1:]), users=myId)
-            link = await client.create_chat_invite_link(chat_id=chat.id)
-            await client.edit_message_text(
-                chat_id=message.chat.id,
-                message_id=message.id,
-                text=MessageText.newGroupCreated.format(chat.title, link.invite_link, link.date))
-        except Exception as E:
-            await client.edit_message_text(
-                chat_id=message.chat.id,
-                message_id=message.id,
-                text=MessageText.howCreateGroup)
-            print(E)
     
     @staticmethod
     async def getId(client: Client, message: Message):
